@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SentinelPulse — SOC Alert Dashboard</title>
+<meta name="author" content="Mohamed Taher"/>
+<meta name="description" content="SentinelPulse SOC Analytics — live alert console with severity, MITRE technique and status filtering."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --surface: rgba(17, 24, 39, 0.55);
+    --border: rgba(148, 163, 184, 0.14);
+    --border-glow: rgba(34, 211, 238, 0.35);
+    --text: #e6edf6;
+    --muted: #8493a8;
+    --cyan: #22d3ee;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --violet: #a78bfa;
+    --mono: 'Fira Code', 'Cascadia Code', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse 55% 40% at 20% 0%, rgba(34,211,238,0.06), transparent 65%),
+      radial-gradient(ellipse 45% 35% at 85% 10%, rgba(52,211,153,0.045), transparent 60%),
+      linear-gradient(rgba(148,163,184,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148,163,184,0.025) 1px, transparent 1px);
+    background-size: auto, auto, 44px 44px, 44px 44px;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; }
+
+  /* ── NAV ── */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(11,15,25,0.8);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner { max-width: 1180px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; color: inherit; }
+  .brand svg { width: 26px; height: 26px; }
+  .brand em { font-style: normal; color: var(--cyan); }
+  .nav-status {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+    border: 1px solid rgba(52,211,153,0.3); border-radius: 999px;
+    padding: 5px 14px; background: rgba(52,211,153,0.06);
+  }
+  .nav-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 8px var(--emerald); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* ── HEADER ── */
+  .page-head { padding: 44px 0 30px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .page-head h1 { font-size: clamp(1.6rem, 3.4vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; }
+  .page-head h1 .accent { background: linear-gradient(92deg, var(--cyan), var(--emerald)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .page-head p { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+  .head-actions { display: flex; gap: 10px; }
+
+  .btn {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 500;
+    padding: 11px 20px; border-radius: 10px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid transparent; letter-spacing: 0.04em;
+    transition: transform .16s, box-shadow .16s, background .16s;
+    text-decoration: none;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(34,211,238,0.18), rgba(52,211,153,0.16));
+    border-color: rgba(34,211,238,0.45); color: var(--cyan);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 26px rgba(34,211,238,0.18); }
+  .btn-ghost { border-color: var(--border); color: var(--muted); background: var(--surface); }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(148,163,184,0.4); }
+  .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── STAT CARDS ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px 20px 18px; backdrop-filter: blur(8px);
+    transition: border-color .2s, transform .2s;
+  }
+  .stat:hover { border-color: var(--border-glow); transform: translateY(-3px); }
+  .stat-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .stat-name { font-size: 0.76rem; color: var(--muted); letter-spacing: 0.06em; font-weight: 600; }
+  .stat-badge { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+  .stat-badge svg { width: 16px; height: 16px; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .stat-value { font-family: var(--mono); font-size: 1.9rem; font-weight: 700; }
+  .stat-delta { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+  .sev-critical .stat-value { color: var(--rose); }
+  .sev-critical .stat-badge { background: rgba(251,113,133,0.1); border: 1px solid rgba(251,113,133,0.3); }
+  .sev-critical .stat-badge svg { stroke: var(--rose); }
+  .sev-high .stat-value { color: var(--amber); }
+  .sev-high .stat-badge { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); }
+  .sev-high .stat-badge svg { stroke: var(--amber); }
+  .sev-medium .stat-value { color: var(--cyan); }
+  .sev-medium .stat-badge { background: rgba(34,211,238,0.1); border: 1px solid rgba(34,211,238,0.3); }
+  .sev-medium .stat-badge svg { stroke: var(--cyan); }
+  .sev-total .stat-value { color: var(--text); }
+  .sev-total .stat-badge { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.3); }
+  .sev-total .stat-badge svg { stroke: var(--emerald); }
+
+  /* ── TECHNIQUE HEATMAP STRIP ── */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; backdrop-filter: blur(10px); margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px; padding: 16px 22px;
+    border-bottom: 1px solid var(--border); background: rgba(11,15,25,0.5);
+    flex-wrap: wrap;
+  }
+  .panel-title { font-weight: 700; font-size: 0.9rem; }
+  .panel-eyebrow { font-family: var(--mono); font-size: 0.66rem; color: var(--cyan); letter-spacing: 0.2em; text-transform: uppercase; margin-right: auto; }
+  .panel-body { padding: 20px 22px; }
+
+  .tech-strip { display: flex; flex-wrap: wrap; gap: 9px; }
+  .tech-cell {
+    font-family: var(--mono); font-size: 0.7rem; padding: 7px 12px;
+    border-radius: 8px; cursor: default; color: var(--muted);
+    background: rgba(11,15,25,0.55); border: 1px solid var(--border);
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: all .18s;
+  }
+  .tech-cell .count {
+    font-size: 0.64rem; padding: 1px 7px; border-radius: 999px;
+    background: rgba(34,211,238,0.12); color: var(--cyan);
+  }
+  .tech-cell.hot { color: var(--rose); border-color: rgba(251,113,133,0.4); background: rgba(251,113,133,0.06); }
+  .tech-cell.hot .count { background: rgba(251,113,133,0.15); color: var(--rose); }
+  .tech-cell.warm { color: var(--amber); border-color: rgba(251,191,36,0.35); }
+  .tech-cell.warm .count { background: rgba(251,191,36,0.12); color: var(--amber); }
+
+  /* ── FILTER BAR ── */
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-label { font-family: var(--mono); font-size: 0.66rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .chip {
+    font-family: var(--mono); font-size: 0.72rem; padding: 6px 13px;
+    border-radius: 999px; cursor: pointer; color: var(--muted);
+    background: rgba(11,15,25,0.55); border: 1px solid var(--border);
+    transition: all .18s; font-weight: 500;
+  }
+  .chip:hover { color: var(--text); border-color: rgba(148,163,184,0.4); }
+  .chip.active { color: var(--cyan); border-color: rgba(34,211,238,0.5); background: rgba(34,211,238,0.08); }
+  .chip.active.chip-critical { color: var(--rose); border-color: rgba(251,113,133,0.5); background: rgba(251,113,133,0.08); }
+  .chip.active.chip-high { color: var(--amber); border-color: rgba(251,191,36,0.5); background: rgba(251,191,36,0.08); }
+  .chip.active.chip-medium { color: var(--cyan); border-color: rgba(34,211,238,0.5); background: rgba(34,211,238,0.08); }
+  .chip.active.chip-open { color: var(--amber); border-color: rgba(251,191,36,0.5); background: rgba(251,191,36,0.08); }
+  .chip.active.chip-resolved { color: var(--emerald); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.08); }
+  .chip.active.chip-all { color: var(--emerald); border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.08); }
+
+  .search-input {
+    background: rgba(5,8,15,0.7); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 14px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--text); outline: none; min-width: 200px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .search-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,211,238,0.12); }
+
+  select.mini-select {
+    background: rgba(5,8,15,0.7); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 12px; font-family: var(--mono);
+    font-size: 0.75rem; color: var(--text); outline: none; cursor: pointer;
+  }
+
+  /* ── ALERT TABLE ── */
+  .alert-table { width: 100%; border-collapse: collapse; }
+  .alert-table th {
+    text-align: left; font-family: var(--mono); font-size: 0.66rem;
+    color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+    font-weight: 500;
+  }
+  .alert-table td {
+    padding: 14px; border-bottom: 1px solid rgba(148,163,184,0.08);
+    font-size: 0.82rem; vertical-align: top;
+  }
+  .alert-table tr { transition: background .15s; animation: row-in .35s ease both; }
+  .alert-table tbody tr:hover { background: rgba(34,211,238,0.04); }
+  @keyframes row-in { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+
+  .sev-tag {
+    font-family: var(--mono); font-size: 0.64rem; font-weight: 700;
+    padding: 3px 10px; border-radius: 6px; letter-spacing: 0.06em;
+    display: inline-block;
+  }
+  .sev-tag.critical { color: var(--rose); background: rgba(251,113,133,0.1); border: 1px solid rgba(251,113,133,0.35); }
+  .sev-tag.high { color: var(--amber); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.35); }
+  .sev-tag.medium { color: var(--cyan); background: rgba(34,211,238,0.1); border: 1px solid rgba(34,211,238,0.35); }
+
+  .tech-tag {
+    font-family: var(--mono); font-size: 0.7rem; color: var(--violet);
+    background: rgba(167,139,250,0.08); border: 1px solid rgba(167,139,250,0.3);
+    padding: 2px 9px; border-radius: 6px; white-space: nowrap; display: inline-block;
+  }
+
+  .rule-id { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); }
+  .alert-name { font-weight: 600; font-size: 0.85rem; }
+  .alert-msg { color: var(--muted); font-family: var(--mono); font-size: 0.72rem; line-height: 1.6; max-width: 360px; word-break: break-word; margin-top: 3px; }
+  .alert-time { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+
+  .status-pill {
+    font-family: var(--mono); font-size: 0.66rem; padding: 4px 11px;
+    border-radius: 999px; cursor: pointer; font-weight: 500;
+    transition: all .16s; display: inline-block;
+  }
+  .status-pill.open { color: var(--amber); background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.35); }
+  .status-pill.resolved { color: var(--emerald); background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.35); }
+  .status-pill:hover { transform: scale(1.05); }
+
+  .empty-state {
+    text-align: center; padding: 50px 20px; color: var(--muted);
+    font-family: var(--mono); font-size: 0.8rem;
+  }
+
+  .result-count { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+
+  /* ── FOOTER ── */
+  footer { margin-top: 30px; border-top: 1px solid var(--border); padding: 30px 0 10px; text-align: center; }
+  footer .line { color: var(--muted); font-size: 0.82rem; line-height: 1.9; }
+  footer a { color: var(--cyan); text-decoration: none; }
+  footer a:hover { color: var(--emerald); }
+
+  @media (max-width: 720px) {
+    .alert-table .hide-sm { display: none; }
+    .alert-msg { max-width: 220px; }
+    .page-head { padding: 32px 0 24px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" style="text-decoration:none;color:inherit;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l7 3.5v5c0 4.8-3 8.6-7 11-4-2.4-7-6.2-7-11v-5L12 2z"/>
+        <path d="M7 12h3l1.5-3 2 6 1.5-3h2"/>
+      </svg>
+      <span>Sentinel<em>Pulse</em> <span style="color:var(--muted);font-weight:500;">/ Alert Console</span></span>
+    </a>
+    <div class="nav-status"><span class="dot"></span> PIPELINE NOMINAL — last scan 08:47 UTC</div>
+  </div>
+</nav>
+
+<div class="wrap" id="top">
+
+  <div class="page-head">
+    <div>
+      <h1>Alert <span class="accent">Overview</span></h1>
+      <p>Detection output from the last SentinelPulse scan — triage CRITICAL and HIGH first.</p>
+    </div>
+    <div class="head-actions">
+      <button class="btn btn-ghost" onclick="resetFilters()">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        RESET FILTERS
+      </button>
+      <button class="btn btn-primary" onclick="rescan()">
+        <svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+        RUN SCAN
+      </button>
+    </div>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="stat-grid">
+    <div class="stat sev-total">
+      <div class="stat-top">
+        <span class="stat-name">TOTAL ALERTS</span>
+        <span class="stat-badge"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
+      </div>
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-delta" id="statTotalDelta">across 15 detection rules</div>
+    </div>
+    <div class="stat sev-critical">
+      <div class="stat-top">
+        <span class="stat-name">CRITICAL</span>
+        <span class="stat-badge"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3l9-16z"/><path d="M12 10v4M12 17h.01"/></svg></span>
+      </div>
+      <div class="stat-value" id="statCritical">0</div>
+      <div class="stat-delta">immediate response</div>
+    </div>
+    <div class="stat sev-high">
+      <div class="stat-top">
+        <span class="stat-name">HIGH</span>
+        <span class="stat-badge"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3l9-16z"/><path d="M12 10v4M12 17h.01"/></svg></span>
+      </div>
+      <div class="stat-value" id="statHigh">0</div>
+      <div class="stat-delta">respond within 30 min</div>
+    </div>
+    <div class="stat sev-medium">
+      <div class="stat-top">
+        <span class="stat-name">MEDIUM</span>
+        <span class="stat-badge"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg></span>
+      </div>
+      <div class="stat-value" id="statMedium">0</div>
+      <div class="stat-delta">respond within 4 hours</div>
+    </div>
+    <div class="stat sev-total">
+      <div class="stat-top">
+        <span class="stat-name">OPEN</span>
+        <span class="stat-badge"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></span>
+      </div>
+      <div class="stat-value" id="statOpen">0</div>
+      <div class="stat-delta">awaiting triage</div>
+    </div>
+  </div>
+
+  <!-- TECHNIQUE HEATMAP -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-eyebrow">MITRE ATT&amp;CK</span>
+      <span class="panel-title">Technique distribution</span>
+      <span class="result-count" style="margin-left:auto;" id="techCount"></span>
+    </div>
+    <div class="panel-body">
+      <div class="tech-strip" id="techStrip"></div>
+    </div>
+  </div>
+
+  <!-- ALERT LOG VIEWER -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-eyebrow">Alert Log</span>
+      <span class="panel-title">Live viewer</span>
+      <div class="filters" style="margin-left:auto;">
+        <input class="search-input" id="searchInput" type="text" placeholder="search message, rule, IP…"/>
+        <select class="mini-select" id="techniqueSelect">
+          <option value="all">All techniques</option>
+        </select>
+        <div class="filter-group">
+          <span class="filter-label">Status</span>
+          <button class="chip chip-all active" data-status="all" onclick="setStatus('all', this)">ALL</button>
+          <button class="chip chip-open" data-status="open" onclick="setStatus('open', this)">OPEN</button>
+          <button class="chip chip-resolved" data-status="resolved" onclick="setStatus('resolved', this)">RESOLVED</button>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Severity</span>
+          <button class="chip chip-critical active" data-sev="critical" onclick="toggleSeverity('critical', this)">CRITICAL</button>
+          <button class="chip chip-high active" data-sev="high" onclick="toggleSeverity('high', this)">HIGH</button>
+          <button class="chip chip-medium active" data-sev="medium" onclick="toggleSeverity('medium', this)">MEDIUM</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-body" style="padding:0;">
+      <table class="alert-table">
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Alert</th>
+            <th>MITRE</th>
+            <th class="hide-sm">Log entry</th>
+            <th class="hide-sm">Time</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="alertBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none">No alerts match the current filters.</div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="line">
+      SentinelPulse SOC Analytics — engineered by <a href="https://github.com/MohamedxTaher" target="_blank" rel="noopener">Mohamed Taher</a>.
+      Source on <a href="https://github.com/MohamedxTaher" target="_blank" rel="noopener">GitHub</a> ·
+      <a href="https://www.linkedin.com/in/mohamed-taherx/" target="_blank" rel="noopener">LinkedIn</a>.
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// Alert dataset — the same shape the alert engine emits, severity-sorted.
+let alerts = [
+  { sev: 'critical', name: 'SQL Injection Probe', rule: 'RULE-012', tech: 'T1190', time: '08:47:12', status: 'open', msg: `GET /search?q=1' OR '1'='1 HTTP/1.1 — sqlmap/1.7 fingerprint` },
+  { sev: 'critical', name: 'Suspicious User Agent', rule: 'RULE-009', tech: 'T1190', time: '08:47:12', status: 'open', msg: 'GET /wp-login.php HTTP/1.1 — user agent sqlmap/1.7 blocked at WAF' },
+  { sev: 'high', name: 'Brute Force Detected', rule: 'RULE-BF', tech: 'T1110', time: '08:47:10', status: 'open', msg: 'Source IP 89.248.167.131 had 9 failed login attempts in 120s' },
+  { sev: 'high', name: 'SSH Brute Force', rule: 'RULE-001', tech: 'T1110', time: '08:46:58', status: 'open', msg: 'Failed password for root from 89.248.167.131 port 55988 ssh2' },
+  { sev: 'high', name: 'Root Login Attempt', rule: 'RULE-007', tech: 'T1110', time: '08:46:58', status: 'resolved', msg: 'Failed password for root from 89.248.167.131 port 58860 ssh2' },
+  { sev: 'high', name: 'Credential Stuffing Attempt', rule: 'RULE-004', tech: 'T1110.004', time: '08:46:54', status: 'open', msg: 'GET /login HTTP/1.1 — 401 burst: 4 responses in 60s from 45.33.32.156' },
+  { sev: 'high', name: 'Directory Traversal Attempt', rule: 'RULE-010', tech: 'T1083', time: '08:46:44', status: 'resolved', msg: 'GET /../etc/passwd HTTP/1.1 — returned 400' },
+  { sev: 'high', name: 'Sensitive File Access Attempt', rule: 'RULE-014', tech: 'T1552.001', time: '08:46:40', status: 'open', msg: 'GET /.env HTTP/1.1 — probing for exposed credentials' },
+  { sev: 'high', name: 'XSS Payload Detected', rule: 'RULE-015', tech: 'T1059.007', time: '08:46:36', status: 'open', msg: 'GET /search?q=<script>alert(1)</script> — reflected payload probe' },
+  { sev: 'medium', name: 'Invalid User Login Attempt', rule: 'RULE-002', tech: 'T1078', time: '08:46:31', status: 'resolved', msg: 'Invalid user jenkins from 89.248.167.131' },
+  { sev: 'medium', name: 'Sudo Authentication Failure', rule: 'RULE-003', tech: 'T1078', time: '08:45:50', status: 'open', msg: 'pam_unix(sudo:auth): authentication failure; logname= uid=1002' },
+  { sev: 'medium', name: 'Segfault Detected', rule: 'RULE-006', tech: 'T1203', time: '08:45:44', status: 'open', msg: 'program[2588]: segfault at 0 ip 00007f rsp 00007f error 4' },
+  { sev: 'medium', name: 'Port Scan Detected', rule: 'RULE-008', tech: 'T1046', time: '08:45:40', status: 'resolved', msg: '[UFW BLOCK] IN=eth0 SRC=185.220.101.45 SCAN flags=S' },
+  { sev: 'medium', name: 'Admin Path Probe', rule: 'RULE-005', tech: 'T1190', time: '08:45:38', status: 'resolved', msg: 'GET /admin HTTP/1.1 — 403 returned' },
+  { sev: 'medium', name: 'Security Scanner Fingerprint', rule: 'RULE-011', tech: 'T1595.002', time: '08:45:30', status: 'open', msg: 'Nikto/2.1.6 user agent on /contact — vulnerability scanning' },
+];
+
+let activeSeverities = new Set(['critical', 'high', 'medium']);
+let activeStatus = 'all';
+
+const TECH_NAMES = {
+  'T1110': 'Brute Force', 'T1110.004': 'Credential Stuffing', 'T1078': 'Valid Accounts',
+  'T1190': 'Exploit Public App', 'T1203': 'Client Execution', 'T1046': 'Service Discovery',
+  'T1083': 'File/Dir Discovery', 'T1595.002': 'Vuln Scanning', 'T1552.001': 'Creds In Files',
+  'T1059.007': 'JavaScript',
+};
+
+// ── Stat cards ──
+function renderStats() {
+  document.getElementById('statTotal').textContent = alerts.length;
+  document.getElementById('statCritical').textContent = alerts.filter(a => a.sev === 'critical').length;
+  document.getElementById('statHigh').textContent = alerts.filter(a => a.sev === 'high').length;
+  document.getElementById('statMedium').textContent = alerts.filter(a => a.sev === 'medium').length;
+  document.getElementById('statOpen').textContent = alerts.filter(a => a.status === 'open').length;
+}
+
+// ── Technique strip ──
+function renderTechStrip() {
+  const counts = {};
+  alerts.forEach(a => { counts[a.tech] = (counts[a.tech] || 0) + 1; });
+
+  const strip = document.getElementById('techStrip');
+  strip.innerHTML = '';
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  sorted.forEach(([tech, count]) => {
+    const cell = document.createElement('span');
+    cell.className = 'tech-cell' + (count >= 3 ? ' hot' : count >= 2 ? ' warm' : '');
+    cell.innerHTML = `<span>${tech}</span><span class="count">${count}</span>`;
+    cell.title = TECH_NAMES[tech] || '';
+    cell.addEventListener('click', () => {
+      const sel = document.getElementById('techniqueSelect');
+      sel.value = tech;
+      renderTable();
+    });
+    strip.appendChild(cell);
+  });
+  document.getElementById('techCount').textContent = `${sorted.length} techniques observed`;
+}
+
+// ── Technique dropdown ──
+function renderTechOptions() {
+  const sel = document.getElementById('techniqueSelect');
+  const seen = new Set();
+  sel.innerHTML = '<option value="all">All techniques</option>';
+  alerts.forEach(a => {
+    if (seen.has(a.tech)) return;
+    seen.add(a.tech);
+    const opt = document.createElement('option');
+    opt.value = a.tech;
+    opt.textContent = `${a.tech} — ${TECH_NAMES[a.tech] || 'Technique'}`;
+    sel.appendChild(opt);
+  });
+}
+
+// ── Alert table ──
+function renderTable() {
+  const body = document.getElementById('alertBody');
+  const empty = document.getElementById('emptyState');
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  const techFilter = document.getElementById('techniqueSelect').value;
+
+  const rows = alerts.filter(a => {
+    if (!activeSeverities.has(a.sev)) return false;
+    if (activeStatus !== 'all' && a.status !== activeStatus) return false;
+    if (techFilter !== 'all' && a.tech !== techFilter) return false;
+    if (search) {
+      const haystack = `${a.name} ${a.rule} ${a.tech} ${a.msg}`.toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  body.innerHTML = '';
+  rows.forEach((a, i) => {
+    const tr = document.createElement('tr');
+    tr.style.animationDelay = Math.min(i * 40, 400) + 'ms';
+    tr.innerHTML = `
+      <td><span class="sev-tag ${a.sev}">${a.sev.toUpperCase()}</span></td>
+      <td>
+        <div class="alert-name">${a.name}</div>
+        <div class="rule-id">${a.rule}</div>
+      </td>
+      <td><span class="tech-tag">${a.tech}</span></td>
+      <td class="hide-sm"><div class="alert-msg">${a.msg}</div></td>
+      <td class="hide-sm"><span class="alert-time">${a.time}</span></td>
+      <td><span class="status-pill ${a.status}" onclick="toggleStatus(${alerts.indexOf(a)})">${a.status === 'open' ? 'OPEN' : 'RESOLVED'}</span></td>
+    `;
+    body.appendChild(tr);
+  });
+
+  empty.style.display = rows.length === 0 ? 'block' : 'none';
+}
+
+function toggleStatus(index) {
+  alerts[index].status = alerts[index].status === 'open' ? 'resolved' : 'open';
+  renderStats();
+  renderTable();
+}
+
+function toggleSeverity(sev, chipEl) {
+  if (activeSeverities.has(sev)) activeSeverities.delete(sev);
+  else activeSeverities.add(sev);
+  chipEl.classList.toggle('active');
+  renderTable();
+}
+
+function setStatus(status, chipEl) {
+  activeStatus = status;
+  document.querySelectorAll('[data-status]').forEach(c => c.classList.remove('active'));
+  chipEl.classList.add('active');
+  renderTable();
+}
+
+function resetFilters() {
+  activeSeverities = new Set(['critical', 'high', 'medium']);
+  activeStatus = 'all';
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.remove('active');
+    if (c.dataset.status === 'all' || c.dataset.sev) c.classList.add('active');
+  });
+  document.getElementById('searchInput').value = '';
+  document.getElementById('techniqueSelect').value = 'all';
+  renderTable();
+}
+
+// Rescan: shuffle a fresh synthetic batch (same distribution the generator emits).
+function rescan() {
+  const statuses = ['open', 'open', 'open', 'resolved'];
+  alerts.forEach(a => { a.status = statuses[Math.floor(Math.random() * statuses.length)]; });
+  const now = new Date();
+  alerts.forEach((a, i) => {
+    const t = new Date(now.getTime() - i * 7000);
+    a.time = t.toTimeString().slice(0, 8);
+  });
+  renderStats();
+  renderTable();
+}
+
+document.getElementById('searchInput').addEventListener('input', renderTable);
+document.getElementById('techniqueSelect').addEventListener('change', renderTable);
+
+renderStats();
+renderTechOptions();
+renderTechStrip();
+renderTable();
+</script>
+</body>
+</html>

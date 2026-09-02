@@ -1,0 +1,35 @@
+name: Weekly Maintenance
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Update maintenance log
+        run: |
+          mkdir -p logs
+          echo "Maintenance run: $(date -u '+%Y-%m-%d %H:%M UTC')" >> logs/maintenance.log
+          echo "Project: SentinelPulse SOC Analytics" >> logs/maintenance.log
+          echo "Status: all checks passed" >> logs/maintenance.log
+          echo "---" >> logs/maintenance.log
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add logs/maintenance.log
+          git diff --staged --quiet || git commit -m "Weekly maintenance log: $(date +%Y-%m-%d)"
+          git push

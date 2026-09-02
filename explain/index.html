@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SentinelPulse — Security Operations Center Field Guide</title>
+<meta name="author" content="Mohamed Taher"/>
+<meta name="description" content="SentinelPulse SOC Analytics — learn how a Security Operations Center detects, investigates and responds to threats."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --bg-raise: #0e1524;
+    --surface: rgba(17, 24, 39, 0.55);
+    --border: rgba(148, 163, 184, 0.14);
+    --border-glow: rgba(34, 211, 238, 0.35);
+    --text: #e6edf6;
+    --muted: #8493a8;
+    --cyan: #22d3ee;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --violet: #a78bfa;
+    --mono: 'Fira Code', 'Cascadia Code', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Ambient background: fixed grid + two soft glow fields */
+  .bg-layer {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 45% at 18% 0%, rgba(34, 211, 238, 0.07), transparent 65%),
+      radial-gradient(ellipse 50% 40% at 85% 20%, rgba(52, 211, 153, 0.05), transparent 60%),
+      linear-gradient(rgba(148,163,184,0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148,163,184,0.028) 1px, transparent 1px);
+    background-size: auto, auto, 44px 44px, 44px 44px;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── NAV ───────────────────────────── */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(11, 15, 25, 0.78);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: 1080px; margin: 0 auto; padding: 14px 24px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.02em; }
+  .brand svg { width: 26px; height: 26px; }
+  .brand .pulse-name { font-size: 1.02rem; }
+  .brand .pulse-name em { font-style: normal; color: var(--cyan); }
+  .nav-links { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  .nav-links a {
+    color: var(--muted); text-decoration: none; font-size: 0.82rem;
+    padding: 7px 12px; border-radius: 8px; transition: color .18s, background .18s;
+    font-weight: 500;
+  }
+  .nav-links a:hover { color: var(--text); background: rgba(148,163,184,0.08); }
+
+  /* ── HERO ───────────────────────────── */
+  .hero { padding: 96px 0 72px; text-align: center; position: relative; }
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.22em;
+    color: var(--cyan); text-transform: uppercase;
+    border: 1px solid rgba(34,211,238,0.3); border-radius: 999px;
+    padding: 7px 16px; margin-bottom: 28px;
+    background: rgba(34,211,238,0.06);
+    box-shadow: 0 0 24px rgba(34,211,238,0.12);
+  }
+  .hero-tag .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--emerald);
+    box-shadow: 0 0 10px var(--emerald);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: 0.45; transform: scale(0.7);} }
+
+  .hero h1 {
+    font-size: clamp(2.6rem, 6.5vw, 4.6rem); font-weight: 800;
+    letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 14px;
+  }
+  .hero h1 .accent {
+    background: linear-gradient(92deg, var(--cyan), var(--emerald));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero-sub { font-size: 1.05rem; color: var(--muted); max-width: 620px; margin: 0 auto 36px; line-height: 1.7; }
+
+  .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--mono); font-size: 0.86rem; font-weight: 500;
+    padding: 13px 26px; border-radius: 10px; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 9px;
+    transition: transform .18s, box-shadow .18s, background .18s, border-color .18s;
+    border: 1px solid transparent; letter-spacing: 0.04em;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(34,211,238,0.18), rgba(52,211,153,0.16));
+    border-color: rgba(34,211,238,0.45); color: var(--cyan);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(34,211,238,0.18); }
+  .btn-ghost { border-color: var(--border); color: var(--muted); background: var(--surface); }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(148,163,184,0.4); transform: translateY(-2px); }
+
+  /* ── STATS ───────────────────────────── */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px; margin: 8px 0 0; padding: 22px 0 0;
+  }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 18px; text-align: center;
+    backdrop-filter: blur(8px); transition: border-color .2s, transform .2s;
+  }
+  .stat:hover { border-color: var(--border-glow); transform: translateY(-3px); }
+  .stat-num {
+    font-family: var(--mono); font-size: 2rem; font-weight: 700;
+    background: linear-gradient(120deg, var(--cyan), var(--emerald));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; letter-spacing: 0.05em; }
+
+  /* ── SECTIONS ───────────────────────────── */
+  section.module { padding: 72px 0 12px; }
+  .module-head { margin-bottom: 34px; }
+  .module-eyebrow {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--cyan);
+    letter-spacing: 0.25em; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .module-title { font-size: clamp(1.5rem, 3.4vw, 2.1rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; }
+  .module-intro { color: var(--muted); line-height: 1.75; max-width: 740px; font-size: 0.95rem; }
+
+  /* ── PIPELINE ───────────────────────────── */
+  .pipeline {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px; margin-bottom: 26px;
+  }
+  .stage {
+    position: relative; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px 20px; backdrop-filter: blur(8px);
+    transition: border-color .2s, transform .2s;
+  }
+  .stage:hover { border-color: var(--border-glow); transform: translateY(-4px); }
+  .stage-icon {
+    width: 42px; height: 42px; border-radius: 11px; display: flex;
+    align-items: center; justify-content: center; margin-bottom: 14px;
+    background: rgba(34,211,238,0.1); border: 1px solid rgba(34,211,238,0.25);
+  }
+  .stage-icon svg { width: 21px; height: 21px; stroke: var(--cyan); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .stage:nth-child(2) .stage-icon { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.25); }
+  .stage:nth-child(2) .stage-icon svg { stroke: var(--emerald); }
+  .stage:nth-child(3) .stage-icon { background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.25); }
+  .stage:nth-child(3) .stage-icon svg { stroke: var(--amber); }
+  .stage:nth-child(4) .stage-icon { background: rgba(167,139,250,0.1); border-color: rgba(167,139,250,0.25); }
+  .stage:nth-child(4) .stage-icon svg { stroke: var(--violet); }
+  .stage-num { position: absolute; top: 18px; right: 18px; font-family: var(--mono); font-size: 0.7rem; color: var(--muted); opacity: 0.6; }
+  .stage-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
+  .stage-body { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+
+  /* ── MITRE MATRIX ───────────────────────────── */
+  .mitre-matrix {
+    border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+    background: var(--surface); backdrop-filter: blur(10px);
+  }
+  .matrix-row { display: grid; grid-template-columns: 190px 1fr; border-bottom: 1px solid var(--border); }
+  .matrix-row:last-child { border-bottom: none; }
+  .matrix-row:hover .tactic-cell { color: var(--cyan); }
+  .tactic-cell {
+    padding: 18px; font-size: 0.8rem; font-weight: 700; color: var(--muted);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px;
+    justify-content: center; transition: color .2s;
+    background: rgba(11,15,25,0.4);
+  }
+  .tactic-cell .tactic-count { font-family: var(--mono); font-size: 0.66rem; color: var(--muted); opacity: 0.65; font-weight: 400; }
+  .tech-cells { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px; align-items: center; }
+  .tech-chip {
+    font-family: var(--mono); font-size: 0.72rem; padding: 7px 12px;
+    border-radius: 8px; cursor: pointer; color: var(--muted);
+    background: rgba(11,15,25,0.55); border: 1px solid var(--border);
+    transition: all .18s; position: relative;
+  }
+  .tech-chip:hover { color: var(--cyan); border-color: rgba(34,211,238,0.45); box-shadow: 0 0 14px rgba(34,211,238,0.14); }
+  .tech-chip.active { color: var(--cyan); border-color: var(--cyan); background: rgba(34,211,238,0.1); }
+  .tech-chip .tech-id { color: inherit; opacity: 0.95; margin-right: 6px; }
+
+  .matrix-detail {
+    border-top: 1px solid var(--border); padding: 22px 24px;
+    display: none; background: rgba(11,15,25,0.6);
+    animation: fade-in 0.3s ease;
+  }
+  .matrix-detail.visible { display: block; }
+  .detail-title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .detail-id { font-family: var(--mono); font-size: 0.8rem; color: var(--cyan); border: 1px solid rgba(34,211,238,0.35); padding: 3px 10px; border-radius: 6px; background: rgba(34,211,238,0.07); }
+  .detail-name { font-weight: 700; font-size: 1rem; }
+  .detail-body { color: var(--muted); font-size: 0.88rem; line-height: 1.7; margin-bottom: 14px; max-width: 720px; }
+  .detail-meta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .meta-pill {
+    font-family: var(--mono); font-size: 0.7rem; color: var(--emerald);
+    border: 1px solid rgba(52,211,153,0.3); border-radius: 999px;
+    padding: 4px 11px; background: rgba(52,211,153,0.06);
+  }
+  .meta-pill.sev-critical { color: var(--rose); border-color: rgba(251,113,133,0.35); background: rgba(251,113,133,0.06); }
+  .meta-pill.sev-high { color: var(--amber); border-color: rgba(251,191,36,0.35); background: rgba(251,191,36,0.06); }
+  .meta-pill.sev-medium { color: var(--cyan); border-color: rgba(34,211,238,0.35); background: rgba(34,211,238,0.06); }
+
+  /* ── TERMINAL ───────────────────────────── */
+  .terminal {
+    border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+    background: rgba(5, 8, 15, 0.9); backdrop-filter: blur(10px);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.4), 0 0 40px rgba(34,211,238,0.05);
+    margin-bottom: 24px;
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: 8px; padding: 12px 18px;
+    background: rgba(17,24,39,0.7); border-bottom: 1px solid var(--border);
+  }
+  .term-dot { width: 11px; height: 11px; border-radius: 50%; }
+  .term-dot.r { background: #ff5f56; } .term-dot.y { background: #ffbd2e; } .term-dot.g { background: #27c93f; }
+  .term-title { margin-left: 10px; font-family: var(--mono); font-size: 0.74rem; color: var(--muted); }
+  .term-body { padding: 22px 24px; font-family: var(--mono); font-size: 0.8rem; line-height: 1.85; min-height: 220px; }
+  .t-prompt { color: var(--emerald); }
+  .t-cmd { color: var(--text); }
+  .t-out { color: #93a3b8; }
+  .t-critical { color: var(--rose); font-weight: 700; }
+  .t-high { color: var(--amber); font-weight: 700; }
+  .t-medium { color: var(--cyan); font-weight: 500; }
+  .t-ok { color: var(--emerald); }
+  .t-mitre { color: var(--violet); font-size: 0.74rem; }
+  .cursor {
+    display: inline-block; width: 8px; height: 1em; background: var(--cyan);
+    margin-left: 3px; vertical-align: text-bottom; animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1;} 50% { opacity: 0;} }
+  .finding { animation: slide-in 0.35s ease both; margin: 8px 0; }
+  @keyframes slide-in { from { opacity: 0; transform: translateX(-12px);} to { opacity: 1; transform: translateX(0);} }
+
+  /* ── IR TIMELINE ───────────────────────────── */
+  .timeline { position: relative; padding-left: 8px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 27px; top: 8px; bottom: 8px; width: 2px;
+    background: linear-gradient(180deg, var(--rose), var(--amber), var(--cyan), var(--emerald));
+    opacity: 0.55; border-radius: 2px;
+  }
+  .tl-item { display: flex; gap: 22px; margin-bottom: 18px; }
+  .tl-node {
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 0.78rem; font-weight: 700;
+    background: var(--bg-raise); border: 1px solid var(--border);
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .tl-item:hover .tl-node { border-color: var(--border-glow); box-shadow: 0 0 16px rgba(34,211,238,0.18); }
+  .tl-card {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px; backdrop-filter: blur(6px);
+    transition: border-color .2s, transform .2s;
+  }
+  .tl-item:hover .tl-card { border-color: rgba(148,163,184,0.3); transform: translateX(4px); }
+  .tl-title { font-weight: 700; font-size: 0.94rem; margin-bottom: 4px; }
+  .tl-body { font-size: 0.83rem; color: var(--muted); line-height: 1.6; }
+  .tl-time { font-family: var(--mono); font-size: 0.7rem; margin-top: 8px; color: var(--muted); opacity: 0.8; }
+
+  /* ── THREAT INTEL ───────────────────────────── */
+  .intel-demo {
+    border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+    background: var(--surface); backdrop-filter: blur(10px);
+  }
+  .intel-header {
+    padding: 13px 20px; border-bottom: 1px solid var(--border);
+    background: rgba(11,15,25,0.6); font-family: var(--mono);
+    font-size: 0.76rem; color: var(--muted); display: flex; align-items: center; gap: 8px;
+  }
+  .intel-body { padding: 22px 24px; }
+  .intel-row { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .intel-input {
+    flex: 1; min-width: 220px; background: rgba(5,8,15,0.8);
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 15px;
+    font-family: var(--mono); font-size: 0.85rem; color: var(--text); outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .intel-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,211,238,0.12); }
+  .intel-result {
+    background: rgba(5,8,15,0.8); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px; font-family: var(--mono);
+    font-size: 0.8rem; line-height: 1.9; color: #93a3b8; display: none;
+    white-space: pre-line;
+  }
+  .score-pill { padding: 2px 10px; border-radius: 999px; font-weight: 700; }
+
+  .intel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 24px; }
+  .intel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; transition: border-color .2s, transform .2s; }
+  .intel-card:hover { border-color: var(--border-glow); transform: translateY(-3px); }
+  .intel-card-title { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
+  .intel-card-title svg { width: 17px; height: 17px; stroke: var(--emerald); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .intel-card-body { font-size: 0.81rem; color: var(--muted); line-height: 1.65; }
+
+  /* ── CHECKLIST ───────────────────────────── */
+  .progress-shell { margin-bottom: 26px; }
+  .progress-track { height: 8px; border-radius: 999px; background: rgba(148,163,184,0.1); border: 1px solid var(--border); overflow: hidden; margin-bottom: 10px; }
+  .progress-fill {
+    height: 100%; width: 0%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--cyan), var(--emerald));
+    box-shadow: 0 0 12px rgba(52,211,153,0.4);
+    transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .progress-caption { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); }
+
+  .skills { list-style: none; display: grid; gap: 10px; }
+  .skill {
+    display: flex; gap: 14px; padding: 16px 18px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; transition: all .2s; backdrop-filter: blur(6px);
+  }
+  .skill:hover { border-color: rgba(148,163,184,0.35); transform: translateX(4px); }
+  .skill.done { border-color: rgba(52,211,153,0.5); background: rgba(52,211,153,0.05); }
+  .skill-check {
+    width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0; margin-top: 2px;
+    border: 1.5px solid rgba(148,163,184,0.4); display: flex; align-items: center;
+    justify-content: center; transition: all .2s;
+  }
+  .skill.done .skill-check { background: var(--emerald); border-color: var(--emerald); box-shadow: 0 0 12px rgba(52,211,153,0.4); }
+  .skill.done .skill-check svg { width: 12px; height: 12px; stroke: #052e1e; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .skill-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 3px; }
+  .skill-desc { font-size: 0.79rem; color: var(--muted); line-height: 1.55; }
+
+  @keyframes fade-in { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: translateY(0);} }
+
+  /* ── FOOTER ───────────────────────────── */
+  footer {
+    margin-top: 90px; border-top: 1px solid var(--border);
+    padding: 44px 24px 40px; text-align: center;
+  }
+  .footer-brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; margin-bottom: 14px; }
+  .footer-brand svg { width: 22px; height: 22px; }
+  .footer-line { color: var(--muted); font-size: 0.84rem; line-height: 1.9; }
+  .footer-line a { color: var(--cyan); text-decoration: none; transition: color .18s; }
+  .footer-line a:hover { color: var(--emerald); }
+  .footer-links { display: flex; gap: 22px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+  .footer-links a {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+    text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+    transition: color .18s;
+  }
+  .footer-links a:hover { color: var(--cyan); }
+  .footer-links svg { width: 15px; height: 15px; fill: currentColor; }
+
+  /* Responsive matrix: stack tactic cells */
+  @media (max-width: 640px) {
+    .matrix-row { grid-template-columns: 1fr; }
+    .tactic-cell { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" style="text-decoration:none;color:inherit;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l7 3.5v5c0 4.8-3 8.6-7 11-4-2.4-7-6.2-7-11v-5L12 2z"/>
+        <path d="M7 12h3l1.5-3 2 6 1.5-3h2"/>
+      </svg>
+      <span class="pulse-name">Sentinel<em>Pulse</em></span>
+    </a>
+    <div class="nav-links">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#mitre">MITRE ATT&amp;CK</a>
+      <a href="#scanner">Live Scan</a>
+      <a href="#ir">Response</a>
+      <a href="#intel">Threat Intel</a>
+      <a href="#skills">Skills</a>
+      <a href="../quiz/index.html" style="color: var(--emerald); border: 1px solid rgba(52,211,153,0.3);">Quiz</a>
+      <a href="../dashboard/index.html" style="color: var(--amber); border: 1px solid rgba(251,191,36,0.3);">Alert Console</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap" id="top">
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-tag"><span class="live-dot"></span> Security Operations Center — Field Guide</div>
+  <h1>Detect. Investigate. <span class="accent">Respond.</span></h1>
+  <p class="hero-sub">SentinelPulse turns raw syslog and Apache access logs into structured, MITRE ATT&amp;CK-tagged alerts. This guide walks through how a real SOC operates — and how every module in this project maps to that workflow.</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="#pipeline">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      Explore the pipeline
+    </a>
+    <a class="btn btn-ghost" href="https://github.com/MohamedxTaher" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.55v-2.17c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.34.95.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.49 3.14-1.18 3.14-1.18.62 1.59.23 2.76.12 3.05.73.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.66.41.36.78 1.05.78 2.12v3.15c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+      View on GitHub
+    </a>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-num" data-target="24">0</div><div class="stat-label">Hours monitored daily</div></div>
+    <div class="stat"><div class="stat-num" data-target="15">0</div><div class="stat-label">Detection rules</div></div>
+    <div class="stat"><div class="stat-num" data-target="7">0</div><div class="stat-label">MITRE tactics covered</div></div>
+    <div class="stat"><div class="stat-num" data-target="30">0</div><div class="stat-label">Min response target — HIGH</div></div>
+  </div>
+</header>
+
+<!-- PIPELINE -->
+<section class="module" id="pipeline">
+  <div class="module-head">
+    <div class="module-eyebrow">01 / Data Flow</div>
+    <h2 class="module-title">From raw logs to actioned alerts</h2>
+    <p class="module-intro">Every SOC follows the same fundamental loop: collect, detect, enrich, respond. Each stage below is a working module in this project — not a diagram abstraction.</p>
+  </div>
+
+  <div class="pipeline">
+    <div class="stage">
+      <span class="stage-num">01</span>
+      <div class="stage-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"/></svg></div>
+      <div class="stage-title">Ingest &amp; Parse</div>
+      <div class="stage-body">The log parser classifies every line as syslog, Apache access or SSH/PAM auth, and flags suspicious keywords for downstream correlation.</div>
+    </div>
+    <div class="stage">
+      <span class="stage-num">02</span>
+      <div class="stage-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+      <div class="stage-title">Detect &amp; Correlate</div>
+      <div class="stage-body">YAML detection rules and a sliding-window brute force detector run against the parsed entries. Matches fire MITRE-tagged alerts.</div>
+    </div>
+    <div class="stage">
+      <span class="stage-num">03</span>
+      <div class="stage-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></div>
+      <div class="stage-title">Enrich</div>
+      <div class="stage-body">Source IPs are checked against AbuseIPDB. A 97% abuse confidence score turns a suspicious login into a confirmed known-bad actor.</div>
+    </div>
+    <div class="stage">
+      <span class="stage-num">04</span>
+      <div class="stage-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 3.5v5c0 4.8-3 8.6-7 11-4-2.4-7-6.2-7-11v-5L12 2z"/></svg></div>
+      <div class="stage-title">Respond</div>
+      <div class="stage-body">The NIST-aligned playbook gives analysts exact containment and escalation steps per alert type — triage to post-incident report.</div>
+    </div>
+  </div>
+</section>
+
+<!-- MITRE MATRIX -->
+<section class="module" id="mitre">
+  <div class="module-head">
+    <div class="module-eyebrow">02 / ATT&amp;CK Coverage</div>
+    <h2 class="module-title">Interactive MITRE ATT&amp;CK matrix</h2>
+    <p class="module-intro">Every detection rule is tagged with a technique ID. Click any technique to see what it covers and which rule fires on it — this is the same tactic-to-technique mapping you'll be asked about in SOC interviews.</p>
+  </div>
+
+  <div class="mitre-matrix">
+    <div id="matrixRows"></div>
+    <div class="matrix-detail" id="matrixDetail">
+      <div class="detail-title">
+        <span class="detail-id" id="detailId"></span>
+        <span class="detail-name" id="detailName"></span>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+      <div class="detail-meta" id="detailMeta"></div>
+    </div>
+  </div>
+</section>
+
+<!-- SCANNER -->
+<section class="module" id="scanner">
+  <div class="module-head">
+    <div class="module-eyebrow">03 / Simulation</div>
+    <h2 class="module-title">Live detection scan</h2>
+    <p class="module-intro">A faithful simulation of the real pipeline output — the same command sequence, the same severity ordering, the same MITRE tags the alert engine emits.</p>
+  </div>
+
+  <div class="terminal">
+    <div class="term-bar">
+      <div class="term-dot r"></div><div class="term-dot y"></div><div class="term-dot g"></div>
+      <span class="term-title">sentinelpulse — zsh</span>
+    </div>
+    <div class="term-body" id="termBody">
+      <div><span class="t-prompt">$</span> <span class="t-cmd">sentinelpulse scan --file sample.log --rules rules.yaml</span><span class="cursor"></span></div>
+      <br/>
+      <div class="t-out">Pipeline idle. Press RUN SCAN to execute a detection pass.</div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" onclick="runScan()" id="scanBtn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+    RUN SCAN
+  </button>
+</section>
+
+<!-- IR -->
+<section class="module" id="ir">
+  <div class="module-head">
+    <div class="module-eyebrow">04 / Incident Response</div>
+    <h2 class="module-title">The response lifecycle</h2>
+    <p class="module-intro">Based on NIST SP 800-61. Steps are decided in advance so nobody is improvising under pressure — the wrong action in the wrong order can turn a contained incident into a full breach.</p>
+  </div>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-node" style="color:var(--rose);border-color:rgba(251,113,133,0.4);">1</div>
+      <div class="tl-card">
+        <div class="tl-title">Triage</div>
+        <div class="tl-body">Alert fires. First question: real threat or false positive? Check the source IP, timing and context before acting.</div>
+        <div class="tl-time">Target — within 5 minutes</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-node" style="color:var(--amber);border-color:rgba(251,191,36,0.4);">2</div>
+      <div class="tl-card">
+        <div class="tl-title">Contain</div>
+        <div class="tl-body">Stop the spread. Block the source IP, isolate affected systems. Goal: deny the attacker any further movement.</div>
+        <div class="tl-time">HIGH alerts — within 30 minutes</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-node" style="color:var(--cyan);border-color:rgba(34,211,238,0.4);">3</div>
+      <div class="tl-card">
+        <div class="tl-title">Investigate &amp; Eradicate</div>
+        <div class="tl-body">Build the event timeline from logs. Did any attempt succeed? Remove persistence, close compromised accounts, patch the exploited flaw.</div>
+        <div class="tl-time">Duration depends on complexity</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-node" style="color:var(--emerald);border-color:rgba(52,211,153,0.4);">4</div>
+      <div class="tl-card">
+        <div class="tl-title">Recover</div>
+        <div class="tl-body">Bring systems back online, verify clean state, monitor for recurrence.</div>
+        <div class="tl-time">With continuous monitoring</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-node" style="color:var(--violet);border-color:rgba(167,139,250,0.4);">5</div>
+      <div class="tl-card">
+        <div class="tl-title">Post-Incident Report</div>
+        <div class="tl-body">What happened, what worked, what failed. Update detection rules so next time the catch comes earlier.</div>
+        <div class="tl-time">Within 5 business days</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INTEL -->
+<section class="module" id="intel">
+  <div class="module-head">
+    <div class="module-eyebrow">05 / Threat Intelligence</div>
+    <h2 class="module-title">Context changes everything</h2>
+    <p class="module-intro">When an IP shows up in your logs, knowing whether it is a known hostile source determines whether you monitor or block. Try the lookup — the demo uses the same data shape AbuseIPDB returns.</p>
+  </div>
+
+  <div class="intel-demo">
+    <div class="intel-header">
+      <div class="term-dot r"></div><div class="term-dot y"></div><div class="term-dot g"></div>
+      <span style="margin-left:10px;">AbuseIPDB reputation lookup — demo dataset</span>
+    </div>
+    <div class="intel-body">
+      <div class="intel-row">
+        <input class="intel-input" id="ipInput" type="text" placeholder="Enter an IP — e.g. 45.33.32.156" value="45.33.32.156"/>
+        <button class="btn btn-primary" onclick="checkIP()">CHECK IP</button>
+      </div>
+      <div class="intel-result" id="ipResult"></div>
+    </div>
+  </div>
+
+  <div class="intel-grid">
+    <div class="intel-card">
+      <div class="intel-card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>Abuse confidence score</div>
+      <div class="intel-card-body">0–100 from AbuseIPDB. Above 80 is almost certainly malicious, based on community reports from security teams worldwide.</div>
+    </div>
+    <div class="intel-card">
+      <div class="intel-card-title"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Geolocation &amp; ISP</div>
+      <div class="intel-card-body">Where the attack originates and who owns the range. A Tor exit node or bulletproof host changes the escalation calculus.</div>
+    </div>
+    <div class="intel-card">
+      <div class="intel-card-title"><svg viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M14 3v5h5"/></svg>Abuse categories</div>
+      <div class="intel-card-body">SSH brute force, port scan, web attack, spam. What the IP is known for predicts what it will try on your systems next.</div>
+    </div>
+  </div>
+</section>
+
+<!-- SKILLS -->
+<section class="module" id="skills">
+  <div class="module-head">
+    <div class="module-eyebrow">06 / Analyst Readiness</div>
+    <h2 class="module-title">Become a SOC analyst</h2>
+    <p class="module-intro">Each item maps to something this project covers — and to topics that come up in real SOC analyst interviews. Tick off what you already know.</p>
+  </div>
+
+  <div class="progress-shell">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-caption" id="progressLabel">0 / 10 skills covered</div>
+  </div>
+
+  <ul class="skills" id="skillsList"></ul>
+</section>
+
+</div>
+
+<footer>
+  <div class="footer-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l7 3.5v5c0 4.8-3 8.6-7 11-4-2.4-7-6.2-7-11v-5L12 2z"/>
+      <path d="M7 12h3l1.5-3 2 6 1.5-3h2"/>
+    </svg>
+    <span>Sentinel<em style="color:var(--cyan);font-style:normal;">Pulse</em> SOC Analytics</span>
+  </div>
+  <div class="footer-line">
+    Designed and engineered by <a href="https://github.com/MohamedxTaher" target="_blank" rel="noopener">Mohamed Taher</a>.
+  </div>
+  <div class="footer-links">
+    <a href="https://github.com/MohamedxTaher" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.55v-2.17c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.34.95.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.49 3.14-1.18 3.14-1.18.62 1.59.23 2.76.12 3.05.73.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.66.41.36.78 1.05.78 2.12v3.15c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+      github.com/MohamedxTaher
+    </a>
+    <a href="https://www.linkedin.com/in/mohamed-taherx/" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>
+      linkedin.com/in/mohamed-taherx
+    </a>
+  </div>
+</footer>
+
+<script>
+// ── Stat counters ─────────────────────────────────────────
+document.querySelectorAll('.stat-num').forEach(el => {
+  const target = parseInt(el.dataset.target, 10);
+  let current = 0;
+  const step = Math.max(1, Math.ceil(target / 40));
+  const timer = setInterval(() => {
+    current = Math.min(current + step, target);
+    el.textContent = current;
+    if (current >= target) clearInterval(timer);
+  }, 35);
+});
+
+// ── MITRE ATT&CK matrix ───────────────────────────────────
+const MITRE_DATA = {
+  'Reconnaissance': [
+    { id: 'T1595.002', name: 'Vulnerability Scanning', rule: 'RULE-011', severity: 'medium', desc: 'Automated scanners such as Nikto fingerprint exposed services and known vulnerable paths before an attacker commits to exploitation.' },
+  ],
+  'Initial Access': [
+    { id: 'T1078', name: 'Valid Accounts', rule: 'RULE-002', severity: 'medium', desc: 'Login attempts against non-existent usernames — a classic sign of username enumeration preceding a credential attack.' },
+    { id: 'T1190', name: 'Exploit Public-Facing Application', rule: 'RULE-005 / 009 / 012', severity: 'critical', desc: 'Probes against admin panels, SQL injection payloads and sqlmap user agents targeting your web tier.' },
+  ],
+  'Execution': [
+    { id: 'T1203', name: 'Exploitation for Client Execution', rule: 'RULE-006', severity: 'medium', desc: 'Segfaults in production services can indicate a crash-based exploitation attempt, not just a buggy build.' },
+    { id: 'T1059.007', name: 'JavaScript Execution', rule: 'RULE-015', severity: 'high', desc: 'Script payloads in HTTP requests — reflected XSS probes aiming to execute in a victim browser.' },
+  ],
+  'Discovery': [
+    { id: 'T1046', name: 'Network Service Discovery', rule: 'RULE-008 / 013', severity: 'medium', desc: 'Firewall block logs and masscan sweeps mapping your exposed attack surface.' },
+    { id: 'T1083', name: 'File and Directory Discovery', rule: 'RULE-010', severity: 'high', desc: 'Directory traversal attempts like /../etc/passwd probing for readable sensitive files.' },
+  ],
+  'Credential Access': [
+    { id: 'T1110', name: 'Brute Force', rule: 'RULE-001 / 007 / BF', severity: 'high', desc: 'Repeated failed logins — especially for root — from a single source. Rate and density matter more than total count.' },
+    { id: 'T1110.004', name: 'Credential Stuffing', rule: 'RULE-004', severity: 'high', desc: 'Bursts of 401 responses on /login: replaying leaked username/password pairs from other breaches.' },
+    { id: 'T1552.001', name: 'Credentials In Files', rule: 'RULE-014', severity: 'high', desc: 'Requests for /.env and config files hunting for secrets accidentally left web-readable.' },
+  ],
+  'Privilege Escalation': [
+    { id: 'T1078', name: 'Valid Accounts', rule: 'RULE-003', severity: 'medium', desc: 'Sudo authentication failures — someone attempted to escalate and was denied. Worth a second look at that account.' },
+  ],
+};
+
+const rowsEl = document.getElementById('matrixRows');
+const detailEl = document.getElementById('matrixDetail');
+const detailId = document.getElementById('detailId');
+const detailName = document.getElementById('detailName');
+const detailBody = document.getElementById('detailBody');
+const detailMeta = document.getElementById('detailMeta');
+
+Object.entries(MITRE_DATA).forEach(([tactic, techniques]) => {
+  const row = document.createElement('div');
+  row.className = 'matrix-row';
+
+  const cell = document.createElement('div');
+  cell.className = 'tactic-cell';
+  cell.innerHTML = `${tactic}<span class="tactic-count">${techniques.length} technique${techniques.length > 1 ? 's' : ''}</span>`;
+
+  const chips = document.createElement('div');
+  chips.className = 'tech-cells';
+
+  techniques.forEach(tech => {
+    const chip = document.createElement('button');
+    chip.className = 'tech-chip';
+    chip.innerHTML = `<span class="tech-id">${tech.id}</span>${tech.name}`;
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.tech-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      detailId.textContent = tech.id;
+      detailName.textContent = tech.name;
+      detailBody.textContent = tech.desc;
+      detailMeta.innerHTML = `
+        <span class="meta-pill sev-${tech.severity}">severity: ${tech.severity}</span>
+        <span class="meta-pill">rule: ${tech.rule}</span>
+        <span class="meta-pill">tactic: ${tactic}</span>`;
+      detailEl.classList.add('visible');
+      detailEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    chips.appendChild(chip);
+  });
+
+  row.appendChild(cell);
+  row.appendChild(chips);
+  rowsEl.appendChild(row);
+});
+
+// ── Live scanner ──────────────────────────────────────────
+const IPS = ['45.33.32.156', '185.220.101.45', '198.20.69.74', '192.168.1.100', '10.0.0.99'];
+const USERS = ['root', 'admin', 'ubuntu', 'postgres', 'deploy', 'git'];
+
+const FINDINGS = [
+  () => {
+    const ip = IPS[Math.floor(Math.random() * IPS.length)];
+    const u = USERS[Math.floor(Math.random() * USERS.length)];
+    return { level: 'HIGH', cls: 't-critical', rule: 'RULE-001 / BRUTE-FORCE', mitre: 'T1110 — Brute Force (Credential Access)', log: `Failed password for ${u} from ${ip} port ${22000 + Math.floor(Math.random() * 40000)} ssh2 — ${3 + Math.floor(Math.random() * 10)} attempts in window` };
+  },
+  () => {
+    const ip = IPS[Math.floor(Math.random() * IPS.length)];
+    return { level: 'HIGH', cls: 't-high', rule: 'RULE-004', mitre: 'T1110.004 — Credential Stuffing (Credential Access)', log: `GET /login — 401 burst from ${ip}: ${3 + Math.floor(Math.random() * 8)} in 60s` };
+  },
+  () => ({ level: 'MEDIUM', cls: 't-medium', rule: 'RULE-003', mitre: 'T1078 — Valid Accounts (Privilege Escalation)', log: `pam_unix(sudo:auth): authentication failure; logname= uid=${1001 + Math.floor(Math.random() * 5)}` }),
+  () => {
+    const u = ['oracle', 'ftpuser', 'nagios', 'jenkins'][Math.floor(Math.random() * 4)];
+    const ip = IPS[Math.floor(Math.random() * IPS.length)];
+    return { level: 'MEDIUM', cls: 't-medium', rule: 'RULE-002', mitre: 'T1078 — Valid Accounts (Initial Access)', log: `Invalid user ${u} from ${ip}` };
+  },
+  () => ({ level: 'MEDIUM', cls: 't-medium', rule: 'RULE-006', mitre: 'T1203 — Client Execution (Execution)', log: `kernel: program[${1000 + Math.floor(Math.random() * 9000)}]: segfault at 0 ip 00007f rsp 00007f error 4` }),
+  () => ({ level: 'CRITICAL', cls: 't-critical', rule: 'RULE-009', mitre: 'T1190 — Exploit Public-Facing App (Initial Access)', log: `GET /search?q=1' OR '1'='1 — sqlmap/1.7 user agent blocked` }),
+];
+
+let scanning = false;
+
+function runScan() {
+  if (scanning) return;
+  scanning = true;
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+
+  const term = document.getElementById('termBody');
+  term.innerHTML = `
+    <div><span class="t-prompt">$</span> <span class="t-cmd">python soc/log_parser/generate_logs.py</span></div>
+    <div class="t-out finding">Generating synthetic mixed-traffic log batch...</div>
+    <div class="t-ok finding">Generated 19 log lines → sample.log</div>
+    <br/>
+    <div><span class="t-prompt">$</span> <span class="t-cmd">python soc/log_parser/parser.py --file sample.log --output parsed.json</span></div>
+  `;
+
+  setTimeout(() => {
+    term.innerHTML += `
+      <div class="t-out finding">Total log entries : 19</div>
+      <div class="t-out finding">Suspicious events : ${8 + Math.floor(Math.random() * 5)}</div>
+      <br/>
+      <div><span class="t-prompt">$</span> <span class="t-cmd">python soc/alert_rules/alert_engine.py --logs parsed.json --rules rules.yaml</span></div>
+    `;
+
+    const chosen = [...FINDINGS].sort(() => Math.random() - 0.5).slice(0, 3 + Math.floor(Math.random() * 2));
+
+    chosen.forEach((fn, i) => {
+      setTimeout(() => {
+        const f = fn();
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <div class="${f.cls} finding" style="font-weight:700">[${f.level}] ${f.rule}</div>
+          <div class="t-mitre finding">  MITRE ATT&CK : ${f.mitre}</div>
+          <div class="t-out finding">  Log entry    : ${f.log}</div>
+        `;
+        term.appendChild(div);
+
+        if (i === chosen.length - 1) {
+          setTimeout(() => {
+            const summary = document.createElement('div');
+            summary.style.cssText = 'margin-top:16px;padding:12px 16px;background:rgba(34,211,238,0.07);border:1px solid rgba(34,211,238,0.3);border-radius:8px;font-family:var(--mono);font-size:0.78rem;color:#8be9fd;';
+            summary.textContent = `Scan complete — ${chosen.length} alert(s). Triage CRITICAL and HIGH findings first.`;
+            term.appendChild(summary);
+            scanning = false;
+            btn.disabled = false;
+            btn.style.opacity = '1';
+          }, 600);
+        }
+      }, (i + 1) * 700);
+    });
+  }, 1200);
+}
+
+// ── Threat intel demo ─────────────────────────────────────
+const IP_DATA = {
+  '45.33.32.156':   { score: 97, reports: 312, country: 'US', category: 'SSH Brute-Force, Port Scan', isp: 'Linode LLC' },
+  '185.220.101.45': { score: 100, reports: 2847, country: 'DE', category: 'Hacking, DDoS Attack', isp: 'Tor Exit Node' },
+  '198.20.69.74':   { score: 89, reports: 156, country: 'US', category: 'Web Attack, Port Scan', isp: 'Shodan.io' },
+  '89.248.167.131': { score: 74, reports: 94, country: 'NL', category: 'SSH, Brute Force', isp: 'WorldStream B.V.' },
+  '8.8.8.8':        { score: 0, reports: 0, country: 'US', category: 'None', isp: 'Google LLC — DNS' },
+  '1.1.1.1':        { score: 0, reports: 0, country: 'AU', category: 'None', isp: 'Cloudflare — DNS' },
+};
+
+function checkIP() {
+  const ip = document.getElementById('ipInput').value.trim();
+  const res = document.getElementById('ipResult');
+  res.style.display = 'block';
+  res.innerHTML = '<span style="color:#8493a8">Querying reputation database...</span>';
+
+  setTimeout(() => {
+    const data = IP_DATA[ip];
+    if (!data) {
+      res.innerHTML = `<span style="color:var(--amber)">[UNKNOWN]</span> ${ip}\n  Not in the demo dataset. Try: 45.33.32.156, 185.220.101.45, 8.8.8.8`;
+      return;
+    }
+    const color = data.score >= 80 ? 'var(--rose)' : data.score >= 40 ? 'var(--amber)' : 'var(--emerald)';
+    const label = data.score >= 80 ? 'MALICIOUS' : data.score >= 40 ? 'SUSPICIOUS' : 'CLEAN';
+    res.innerHTML = `<span style="color:${color};font-weight:700">[${label}]</span> ${ip}
+  Abuse Score  : <span class="score-pill" style="color:${color}">${data.score}%</span>
+  Total Reports: ${data.reports}
+  Country      : ${data.country}
+  ISP          : ${data.isp}
+  Categories   : ${data.category}
+
+<span style="color:#8493a8">${data.score >= 80 ? 'Recommendation: block at firewall and escalate.' : data.score >= 40 ? 'Recommendation: monitor closely.' : 'No action required — clean source.'}</span>`;
+  }, 750);
+}
+
+document.getElementById('ipInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkIP(); });
+
+// ── Skills checklist ──────────────────────────────────────
+const SKILLS = [
+  ['Understand what logs are and why they matter', 'Logs are the primary data source for a SOC. No logs means no visibility into what is happening on your systems.'],
+  ['Distinguish a false positive from a real threat', 'Triage is the first skill every analyst develops — quickly assessing whether an alert deserves investigation.'],
+  ['Know MITRE ATT&CK tactics and techniques', 'Mapping an event to a tactic and technique proves you understand attacker behaviour, not just tool output.'],
+  ['Recognise brute force in logs', 'Repeated failed SSH logins from one IP, root-targeted attempts, invalid user probes — patterns you should read instantly.'],
+  ['Understand threat intelligence and IP reputation', 'Enriching alerts with external context — AbuseIPDB, VirusTotal, Shodan — separates good analysts from average ones.'],
+  ['Know the NIST incident response lifecycle', 'Preparation, Detection, Containment, Eradication, Recovery, Post-Incident. Every SOC uses some version of this.'],
+  ['Understand what a SIEM does', 'A SIEM aggregates logs and correlates them to surface suspicious patterns. Splunk and Elastic dominate; know the concept regardless.'],
+  ['Read and write basic Python', 'Not every analyst codes, but modifying a parser or writing a quick script is a major interview differentiator.'],
+  ['Know what a detection rule looks like', 'Reading a YAML rule, explaining its match logic and justifying its threshold shows detection engineering awareness.'],
+  ['Understand the principle of least privilege', 'So many incidents involve compromised accounts with too much access. This connects SOC work to the broader security picture.'],
+];
+
+const skillsList = document.getElementById('skillsList');
+SKILLS.forEach(([title, desc]) => {
+  const li = document.createElement('li');
+  li.className = 'skill';
+  li.innerHTML = `
+    <div class="skill-check"><svg viewBox="0 0 24 24" style="display:none"><path d="M5 13l4 4L19 7"/></svg></div>
+    <div><div class="skill-title">${title}</div><div class="skill-desc">${desc}</div></div>`;
+  li.addEventListener('click', () => {
+    li.classList.toggle('done');
+    li.querySelector('svg').style.display = li.classList.contains('done') ? 'block' : 'none';
+    const total = document.querySelectorAll('.skill').length;
+    const done = document.querySelectorAll('.skill.done').length;
+    const pct = Math.round(done / total * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = `${done} / ${total} skills covered (${pct}%)`;
+  });
+  skillsList.appendChild(li);
+});
+</script>
+</body>
+</html>
