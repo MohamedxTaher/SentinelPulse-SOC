@@ -11,7 +11,7 @@
 ![MITRE](https://img.shields.io/badge/MITRE-ATT%26CK-0b0f19?style=flat-square&logoColor=22d3ee)
 ![Rules](https://img.shields.io/badge/detection%20rules-15-0b0f19?style=flat-square&logoColor=fb7185)
 ![SOC](https://img.shields.io/badge/domain-Security%20Operations-0b0f19?style=flat-square&logoColor=fbbf24)
-![Tests](https://img.shields.io/badge/tests-11%20passing-0b0f19?style=flat-square&logo=pytest&logoColor=34d399)
+![Tests](https://img.shields.io/badge/tests-12%20passing-0b0f19?style=flat-square&logo=pytest&logoColor=34d399)
 
 <br/>
 

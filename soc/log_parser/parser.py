@@ -30,6 +30,8 @@ PATTERNS = {
     "apache": re.compile(
         r"(?P<ip>\S+)\s+\S+\s+\S+\s+\[(?P<timestamp>[^\]]+)\]\s+"
         r'"(?P<request>[^"]+)"\s+(?P<status>\d{3})\s+(?P<size>\S+)'
+        r'(?:\s+"(?P<referer>[^"]*)")?'
+        r'(?:\s+"(?P<user_agent>[^"]*)")?'
     ),
     "syslog": re.compile(
         r"(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+"
